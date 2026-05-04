@@ -6,8 +6,20 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pyspark.sql import SparkSession
+import cml.data_v1 as cmldata
 
-spark = SparkSession.builder.appName("FlightModel").getOrCreate()
+# Sample in-code customization of spark configurations
+#from pyspark import SparkContext
+#SparkContext.setSystemProperty('spark.executor.cores', '1')
+#SparkContext.setSystemProperty('spark.executor.memory', '2g')
+
+CONNECTION_NAME = "cf-aw-dl"
+conn = cmldata.get_connection(CONNECTION_NAME)
+spark = conn.get_spark_session()
+
+# Sample usage to run query through spark
+EXAMPLE_SQL_QUERY = "show databases"
+spark.sql(EXAMPLE_SQL_QUERY).show()
 
 df = spark.read.csv("data/preprocessed_flight_data.csv", header=True, inferSchema=True)
 
