@@ -1,10 +1,8 @@
-# ###########################################################################
-#
-#  CLOUDERA APPLIED MACHINE LEARNING PROTOTYPE (AMP)
-#  (C) Cloudera, Inc. 2022
+#****************************************************************************
+# (C) Cloudera, Inc. 2020-2025
 #  All rights reserved.
 #
-#  Applicable Open Source License: Apache 2.0
+#  Applicable Open Source License: GNU Affero General Public License v3.0
 #
 #  NOTE: Cloudera open source products are modular software products
 #  made up of hundreds of individual components, each of which was
@@ -36,14 +34,8 @@
 #  BUSINESS ADVANTAGE OR UNAVAILABILITY, OR LOSS OR CORRUPTION OF
 #  DATA.
 #
-# ###########################################################################
-
-# The following script loads the sampled dataset that was created in 3_data_processing.py (or loads
-# the locally saved version if STORAGE_MODE=local) and trains an XGBoost classification model to predict
-# if a flight will be cancelled based on a selected set of input features
-
-# Note - This script simply trains an XGBoost model, but does not tune hyperparameters. In practice,
-# thoughtful consideration should be spent optimizing a model for the proper set of evaluation metrics.
+# #  Author(s): Johnathan Ingalls, Paul de Fusco
+#***************************************************************************/
 
 import os
 import shutil
@@ -55,6 +47,8 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score, recall_score
+import mlflow
 
 def main():
     cancelled_flights = pd.read_csv("data/preprocessed_flight_data.csv")
@@ -73,6 +67,9 @@ def main():
 
     y = cancelled_flights[["cancelled"]]
 
+    EXPERIMENT_NAME = "xgboost training"
+    mlflow.set_experiment(EXPERIMENT_NAME)
+
     # one-hot encode categorical columns
     categorical_cols = ["uniquecarrier", "origin", "dest"]
     ct = ColumnTransformer(
@@ -83,21 +80,54 @@ def main():
     # train/test split
     X_train, X_test, y_train, y_test = train_test_split(X_trans, y, random_state=42)
 
-    # fit a model
-    xgbclf = xgb.XGBClassifier()
-    pipe = Pipeline([("scaler", StandardScaler(with_mean=False)), ("xgbclf", xgbclf)])
-    pipe.fit(X_train, y_train)
+    # experiment tracking
+    with mlflow.start_run():
+        # fit a model
+        xgbclf = xgb.XGBClassifier()
+        pipe = Pipeline([("scaler", StandardScaler(with_mean=False)), ("xgbclf", xgbclf)])
+        pipe.fit(X_train, y_train)
 
-    # create classification report
-    y_pred = pipe.predict(X_test)
-    targets = ["Not-cancelled", "Cancelled"]
-    cls_report = classification_report(y_test, y_pred, target_names=targets)
-    print(cls_report)
+        # create classification report
+        y_pred = pipe.predict(X_test)
+
+        accuracy = accuracy_score(y_test, y_pred)
+        print("Accuracy: %.2f%%" % (accuracy * 100.0))
+        print("Test Size: %.2f%%" % (test_size * 100.0))
+        mlflow.log_param("accuracy", accuracy)
+        mlflow.log_param("test_size", test_size)
+
+        mlflow.xgboost.log_model(model, artifact_path="artifacts")
+
+        targets = ["Not-cancelled", "Cancelled"]
+        cls_report = classification_report(y_test, y_pred, target_names=targets)
+        print(cls_report)
 
     # save model
     os.makedirs("models", exist_ok=True)
     dump(pipe, "models/pipe.joblib")
     dump(ct, "models/ct.joblib")
+
+    def getLatestExperimentInfo(experimentName):
+        """
+        Method to capture the latest Experiment Id and Run ID for the provided experimentName
+        """
+        experimentId = mlflow.get_experiment_by_name(experimentName).experiment_id
+        runsDf = mlflow.search_runs(experimentId, run_view_type=1)
+        experimentId = runsDf.iloc[-1]['experiment_id']
+        experimentRunId = runsDf.iloc[-1]['run_id']
+
+        return experimentId, experimentRunId
+
+    experimentId, experimentRunId = getLatestExperimentInfo(EXPERIMENT_NAME)
+
+    #Replace Experiment Run ID here:
+    run = mlflow.get_run(experimentRunId)
+
+    pd.DataFrame(data=[run.data.params], index=["Value"]).T
+    pd.DataFrame(data=[run.data.metrics], index=["Value"]).T
+
+    client = mlflow.tracking.MlflowClient()
+    client.list_artifacts(run_id=run.info.run_id)
 
 
 if __name__ == "__main__":
