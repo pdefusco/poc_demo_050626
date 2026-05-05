@@ -94,7 +94,6 @@ def main():
         print("Accuracy: %.2f%%" % (accuracy * 100.0))
         print("Test Size: %.2f%%" % (test_size * 100.0))
         mlflow.log_param("accuracy", accuracy)
-        mlflow.log_param("test_size", test_size)
 
         mlflow.xgboost.log_model(model, artifact_path="artifacts")
 
