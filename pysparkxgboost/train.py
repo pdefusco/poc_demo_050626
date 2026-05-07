@@ -39,3 +39,58 @@
 
 !pip install xgboost onnx onnxmltools skl2onnx
 !pip install xgboost pyspark
+
+from pyspark.sql import SparkSession
+from pyspark.ml.feature import VectorAssembler
+from xgboost.spark import SparkXGBClassifier
+
+spark = SparkSession.builder.getOrCreate()
+
+data = [
+    (0.0, 1.0, 0),
+    (1.0, 2.0, 0),
+    (2.0, 1.0, 1),
+    (3.0, 3.0, 1),
+]
+
+df = spark.createDataFrame(data, ["x1", "x2", "label"])
+
+assembler = VectorAssembler(
+    inputCols=["x1", "x2"],
+    outputCol="features"
+)
+
+train_df = assembler.transform(df).select("features", "label")
+
+xgb = SparkXGBClassifier(
+    features_col="features",
+    label_col="label",
+    num_workers=2,
+    max_depth=3,
+    n_estimators=10,
+)
+
+model = xgb.fit(train_df)
+
+import xgboost as xgb
+from onnxmltools import convert_xgboost
+from onnxmltools.convert.common.data_types import FloatTensorType
+
+# Save booster temporarily
+booster.save_model("/tmp/xgb.json")
+
+# Re-load into standard XGBoost classifier
+native_model = xgb.XGBClassifier()
+native_model.load_model("/tmp/xgb.json")
+
+initial_type = [
+    ("features", FloatTensorType([None, 2]))
+]
+
+onnx_model = convert_xgboost(
+    native_model,
+    initial_types=initial_type
+)
+
+with open("/tmp/xgb_model.onnx", "wb") as f:
+    f.write(onnx_model.SerializeToString())
