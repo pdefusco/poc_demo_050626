@@ -37,14 +37,30 @@
 # #  Author(s): Jonathan Ingalls, Paul de Fusco
 #***************************************************************************/
 
-!pip install xgboost onnx onnxmltools skl2onnx
-!pip install xgboost pyspark
-
+#!pip install onnx onnxmltools skl2onnx
+from pyspark import SparkContext
 from pyspark.sql import SparkSession
-from pyspark.ml.feature import VectorAssembler
 from xgboost.spark import SparkXGBClassifier
+import cml.data_v1 as cmldata
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql.types import LongType, FloatType, IntegerType, StringType, \
+                              DoubleType, BooleanType, ShortType, \
+                              TimestampType, DateType, DecimalType, \
+                              ByteType, BinaryType, ArrayType, MapType, \
+                              StructType, StructField
 
-spark = SparkSession.builder.getOrCreate()
+# Sample in-code customization of spark configurations
+SparkContext.setSystemProperty('spark.executor.cores', '2')
+SparkContext.setSystemProperty('spark.executor.memory', '4g')
+SparkContext.setSystemProperty('spark.executor.instances', '4')
+SparkContext.setSystemProperty('spark.driver.cores', '2')
+SparkContext.setSystemProperty('spark.driver.memory', '4g')
+SparkContext.setSystemProperty('spark.dynamicAllocation.enabled', 'false')
+
+CONNECTION_NAME = "cf-aw-dl"
+conn = cmldata.get_connection(CONNECTION_NAME)
+spark = conn.get_spark_session()
 
 data = [
     (0.0, 1.0, 0),
@@ -77,11 +93,11 @@ from onnxmltools import convert_xgboost
 from onnxmltools.convert.common.data_types import FloatTensorType
 
 # Save booster temporarily
-booster.save_model("/tmp/xgb.json")
+booster.save_model("/home/cdsw/xgb.json")
 
 # Re-load into standard XGBoost classifier
 native_model = xgb.XGBClassifier()
-native_model.load_model("/tmp/xgb.json")
+native_model.load_model("/home/cdsw/xgb.json")
 
 initial_type = [
     ("features", FloatTensorType([None, 2]))
@@ -92,5 +108,5 @@ onnx_model = convert_xgboost(
     initial_types=initial_type
 )
 
-with open("/tmp/xgb_model.onnx", "wb") as f:
+with open("/home/cdsw/xgb_model.onnx", "wb") as f:
     f.write(onnx_model.SerializeToString())
