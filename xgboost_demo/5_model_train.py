@@ -34,7 +34,7 @@
 #  BUSINESS ADVANTAGE OR UNAVAILABILITY, OR LOSS OR CORRUPTION OF
 #  DATA.
 #
-# #  Author(s): Johnathan Ingalls, Paul de Fusco
+# #  Author(s): Jonathan Ingalls, Paul de Fusco
 #***************************************************************************/
 
 import os
@@ -92,10 +92,9 @@ def main():
 
         accuracy = accuracy_score(y_test, y_pred)
         print("Accuracy: %.2f%%" % (accuracy * 100.0))
-        print("Test Size: %.2f%%" % (test_size * 100.0))
         mlflow.log_param("accuracy", accuracy)
 
-        mlflow.xgboost.log_model(model, artifact_path="artifacts")
+        mlflow.xgboost.log_model(xgbclf, artifact_path="artifacts")
 
         targets = ["Not-cancelled", "Cancelled"]
         cls_report = classification_report(y_test, y_pred, target_names=targets)
